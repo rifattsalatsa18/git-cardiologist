@@ -29,7 +29,7 @@ export function Landing() {
           <p className="font-mono text-xs tracking-widest uppercase text-teal mb-4">
             Simulated pre-screening demo
           </p>
-          <h1 className="font-display text-4xl sm:text-5xl font-semibold leading-tight text-ink">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold leading-tight text-ink">
             Look into your camera. Read a sentence. See your heart&rsquo;s rhythm.
           </h1>
           <p className="mt-5 text-lg text-ink-soft leading-relaxed">

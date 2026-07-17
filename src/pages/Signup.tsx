@@ -1,6 +1,7 @@
+// Signup.tsx
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { HeartPulse, Stethoscope, UserRound } from 'lucide-react'
 import { PasswordInput } from '../components/ui/PasswordInput'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,8 +16,14 @@ interface DoctorOption {
 export function Signup() {
   const { signUp, isAuthenticated, profile, loading, profileLoading } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  const [role, setRole] = useState<UserRole>('patient')
+  // FIX 3: baca role awal dari state navigasi (tombol "I'm a Doctor" di landing page)
+  const initialRoleFromState = location.state?.initialRole
+  const [role, setRole] = useState<UserRole>(
+    initialRoleFromState === 'doctor' ? 'doctor' : 'patient',
+  )
+
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -27,13 +34,25 @@ export function Signup() {
 
   useEffect(() => {
     if (role !== 'patient') return
+
+    let isMounted = true
+
     supabase
       .from('profiles')
       .select('id, full_name')
       .eq('role', 'doctor')
-      .then(({ data }) => {
+      .then(({ data, error: fetchError }) => {
+        if (!isMounted) return
+        if (fetchError) {
+          console.error('Failed to load doctors list:', fetchError)
+          return
+        }
         if (data) setDoctors(data as DoctorOption[])
       })
+
+    return () => {
+      isMounted = false
+    }
   }, [role])
 
   if (loading || (isAuthenticated && profileLoading)) {
@@ -53,7 +72,16 @@ export function Signup() {
     setSubmitting(true)
     setError(null)
 
-    const { error: signUpError, profile: signedUpProfile } = await signUp({
+    // FIX 2: pasien wajib memilih dokter jika daftar dokter tersedia,
+    // agar tidak memicu error FK "recordings_patient_id_fkey" di kemudian hari.
+    if (role === 'patient' && doctors.length > 0 && !assignedDoctorId) {
+      setError('Please select a doctor to monitor your cardiovascular reports.')
+      setSubmitting(false)
+      return
+    }
+
+    // FIX 1: full_name & role dikirim lewat options.data saat signUp
+    const { error: signUpError } = await signUp({
       email,
       password,
       fullName,
@@ -61,14 +89,34 @@ export function Signup() {
       assignedDoctorId: role === 'patient' ? assignedDoctorId || undefined : undefined,
     })
 
-    setSubmitting(false)
-
     if (signUpError) {
       setError(signUpError)
+      setSubmitting(false)
       return
     }
 
-    navigate(signedUpProfile?.role === 'doctor' ? '/doctor' : '/patient', { replace: true })
+    // FIX 1 (lanjutan): jaminan (fallback) agar baris di tabel `profiles`
+    // benar-benar tersimpan di Table Editor Supabase, bukan cuma di user_metadata.
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData?.user) {
+        const { error: upsertError } = await supabase.from('profiles').upsert({
+          id: userData.user.id,
+          full_name: fullName,
+          role,
+          assigned_doctor_id: role === 'patient' ? assignedDoctorId || null : null,
+          updated_at: new Date().toISOString(),
+        })
+        if (upsertError) {
+          console.error('Profile upsert fallback failed:', upsertError)
+        }
+      }
+    } catch (dbError) {
+      console.error('Profile upsert fallback threw:', dbError)
+    }
+
+    setSubmitting(false)
+    navigate(role === 'doctor' ? '/doctor' : '/patient', { replace: true })
   }
 
   return (
@@ -152,15 +200,16 @@ export function Signup() {
         {role === 'patient' && (
           <div>
             <label htmlFor="doctor" className="block text-sm font-medium text-ink mb-1.5">
-              Assign a doctor <span className="text-ink-soft font-normal">(optional)</span>
+              Assign a doctor
             </label>
             <select
               id="doctor"
+              required
               value={assignedDoctorId}
               onChange={(e) => setAssignedDoctorId(e.target.value)}
               className="w-full rounded-lg border border-ink/15 px-3.5 py-2.5 focus:border-teal outline-none bg-paper"
             >
-              <option value="">No doctor yet</option>
+              <option value="" disabled>-- Select Your Assigned Specialist --</option>
               {doctors.map((doc) => (
                 <option key={doc.id} value={doc.id}>
                   Dr. {doc.full_name}
@@ -168,8 +217,8 @@ export function Signup() {
               ))}
             </select>
             {doctors.length === 0 && (
-              <p className="text-xs text-ink-soft mt-1.5">
-                No doctors have signed up yet — you can pick one later from your dashboard.
+              <p className="text-xs text-alert mt-1.5 bg-alert-soft px-2 py-1.5 rounded">
+                Warning: No doctor accounts found. Create a Doctor account first to prevent recording data errors.
               </p>
             )}
           </div>
