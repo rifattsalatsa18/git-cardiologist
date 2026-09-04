@@ -195,8 +195,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextProfile = await loadProfile(data.session.user)
       return { error: null, profile: nextProfile }
     }
-
-    // Email confirmation disabled — Supabase may omit session; sign in immediately.
     return signIn(email, password)
   }
 

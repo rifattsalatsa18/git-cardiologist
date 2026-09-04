@@ -48,9 +48,7 @@ export function RecordingSession() {
       }
       setCameraAvailable(true)
     } catch {
-      // No camera/mic access (permission denied, unsupported environment, etc).
-      // The rest of this app is a simulation anyway, so the scan still proceeds —
-      // it just shows a placeholder instead of a live feed.
+      // It just shows a placeholder instead of a live feed.
       setCameraAvailable(false)
     }
     setPhase('recording')

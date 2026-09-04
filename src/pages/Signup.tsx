@@ -18,7 +18,6 @@ export function Signup() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // FIX 3: baca role awal dari state navigasi (tombol "I'm a Doctor" di landing page)
   const initialRoleFromState = location.state?.initialRole
   const [role, setRole] = useState<UserRole>(
     initialRoleFromState === 'doctor' ? 'doctor' : 'patient',
@@ -72,15 +71,12 @@ export function Signup() {
     setSubmitting(true)
     setError(null)
 
-    // FIX 2: pasien wajib memilih dokter jika daftar dokter tersedia,
-    // agar tidak memicu error FK "recordings_patient_id_fkey" di kemudian hari.
     if (role === 'patient' && doctors.length > 0 && !assignedDoctorId) {
       setError('Please select a doctor to monitor your cardiovascular reports.')
       setSubmitting(false)
       return
     }
 
-    // FIX 1: full_name & role dikirim lewat options.data saat signUp
     const { error: signUpError } = await signUp({
       email,
       password,
@@ -95,8 +91,6 @@ export function Signup() {
       return
     }
 
-    // FIX 1 (lanjutan): jaminan (fallback) agar baris di tabel `profiles`
-    // benar-benar tersimpan di Table Editor Supabase, bukan cuma di user_metadata.
     try {
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user) {
